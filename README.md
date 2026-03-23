@@ -33,7 +33,7 @@ Both hypotheses were confirmed empirically.
 | **Language preprocessing** | Zemberek NLP (Turkish lemmatisation, 94.3% success rate) |
 | **Text analysis** | R + Quanteda (document-feature matrix, dictionary-based scoring) |
 | **Nostalgia detection** | Custom-built nostalgia dictionary (iterative refinement: 283 → 76 → 26 collocations) |
-| **Validation** | Manual coding of 1,500 stratified sentences (500 per dictionary × 3 versions) — **87.6% accuracy, F1: 87.7%** |
+| **Validation** | 500 sentences manually coded by the author (stratified: 250 nostalgic / 250 non-nostalgic) — **87.6% accuracy, F1: 87.7%** |
 | **Statistical models** | Correlation analysis, lag regression (0–4 quarters), structural break testing, VIF diagnostics |
 | **Economic data** | TÜİK (inflation, unemployment) + CBRT (CPI, exchange rate, consumer confidence) |
 
@@ -48,7 +48,7 @@ Both hypotheses were confirmed empirically.
 | Medium (76 collocations) | 72.1% | 71.3% | 72.9% | 69.0% |
 | Weak (283 collocations) | 72.9% | 55.7% | 85.0% | 52.8% |
 
-> Validation: 1,500 manually coded sentences total (500 stratified sentences per dictionary version), with balanced nostalgic/non-nostalgic sampling.
+> Validation: 500 sentences manually coded by the author for the Strong dictionary (stratified sampling, 250 nostalgic / 250 non-nostalgic). Results presented incrementally per 100 sentences — confirming metric stability (plateau effect).
 
 ### Economic Indicators vs. Nostalgic Discourse
 - **Inflation** (lag 4, ~12 months): β = 0.032, p < 0.001, R² = 42.2%
@@ -63,34 +63,39 @@ Both hypotheses were confirmed empirically.
 
 ---
 
-## Theoretical Contribution
+## Visualisations
 
-The findings empirically support Müller & Proksch's (2024) concept of nostalgia as a **"concealment mechanism"** — the 12-month lag between economic shock and peak nostalgic discourse suggests deliberate, strategically timed political communication rather than spontaneous emotional response.
+### Nostalgic Discourse Evolution (2011–2022)
+![Nostalgic Discourse Evolution](outputs/figures/01_nostalgia_discourse_evolution_2011_2022.png)
+*Quarterly AKP nostalgic discourse scores across three dictionary specifications. Dashed line marks the 2017 constitutional referendum.*
 
-This is the first large-scale quantitative study to examine the economic crisis–nostalgia relationship in Turkish parliamentary discourse, shifting focus from leader-centric analyses to institutional party rhetoric.
+### Temporal Lag Effects — R² Heatmap
+![Temporal Lag Effects](outputs/figures/02_temporal_lag_effects_heatmap.png)
+*R² values for each economic indicator across lag periods (0–12 months). Inflation at 12-month lag achieves the highest explanatory power (R²=0.422).*
+
+### Economic Indicators Correlation Matrix
+![Correlation Matrix](outputs/figures/03_economic_indicators_correlation_matrix.png)
+*Pairwise correlations between economic indicators and nostalgia score. Consumer confidence shows the strongest inverse relationship (r=–0.50).*
+
+### Dictionary Precision-Recall Trade-off
+![Precision Recall](outputs/figures/04_precision_recall_tradeoff.png)
+*Strong dictionary dominates across both precision and F1-score, justifying the final selection of 26 high-confidence collocations.*
 
 ---
 
 ## Repository Structure
 
 ```
-├── data/
-│   ├── raw/                  # ParlaMint-TR corpus extracts
-│   ├── processed/            # Lemmatised & cleaned speeches
-│   └── economic/             # TÜİK + CBRT quarterly indicators
-├── dictionaries/
-│   ├── strong_dict.csv       # Final 26-collocation nostalgia dictionary
-│   ├── medium_dict.csv       # 76-collocation version
-│   └── weak_dict.csv         # 283-collocation version
 ├── notebooks/
-│   ├── 01_preprocessing.R    # Lemmatisation + cleaning pipeline
-│   ├── 02_dictionary_dev.R   # Collocation extraction + validation
-│   ├── 03_scoring.R          # Nostalgia score calculation
-│   └── 04_analysis.R         # Regression, lag models, structural break
-├── validation/
-│   └── validation_500.csv    # 500 manually coded sentences + guidelines
+│   ├── 01_data_cleaning.R         # Word count filtering (286K → 29,860 speeches)
+│   ├── 02_stopword_filtering.R    # Procedural keyword removal
+│   ├── 03_lemmatisation.py        # Turkish lemmatisation via Zemberek NLP
+│   ├── 04_ngram_dictionary.R      # N-gram collocation extraction & dictionary construction
+│   ├── 05_nostalgia_scoring.R     # Nostalgia score calculation (Müller & Proksch 2024)
+│   ├── 06_validation.R            # Stratified validation sample generation
+│   └── 07_regression_analysis.R  # Regression, lag models, VIF, structural break
 ├── outputs/
-│   └── figures/              # All charts and visualisations
+│   └── figures/                   # All charts and visualisations
 └── README.md
 ```
 
@@ -99,46 +104,63 @@ This is the first large-scale quantitative study to examine the economic crisis�
 ## Reproducing the Analysis
 
 ### Prerequisites
+
 ```r
 # R packages
-install.packages(c("quanteda", "quanteda.textstats", "ggplot2", 
-                   "dplyr", "stringr", "lubridate", "readxl", "writexl"))
+install.packages(c("quanteda", "quanteda.textstats", "quanteda.textplots",
+                   "ggplot2", "dplyr", "stringr", "lubridate",
+                   "readxl", "writexl", "corrplot", "broom",
+                   "stargazer", "car", "lmtest"))
 ```
 
 ```bash
-# Python (for Zemberek lemmatisation preprocessing)
-pip install zemberek-python
+# Python (for Zemberek lemmatisation)
+pip install jpype1 pandas
+# Download Zemberek JAR: https://github.com/ahmetaa/zemberek-nlp/releases
+# Java JDK 21 required
 ```
 
 ### Run Order
+
 ```bash
-# 1. Preprocess and lemmatise
-Rscript notebooks/01_preprocessing.R
+# 1. Filter and clean raw corpus
+Rscript notebooks/01_data_cleaning.R
 
-# 2. Build and validate dictionary
-Rscript notebooks/02_dictionary_dev.R
+# 2. Remove procedural keywords
+Rscript notebooks/02_stopword_filtering.R
 
-# 3. Calculate nostalgia scores
-Rscript notebooks/03_scoring.R
+# 3. Lemmatise with Zemberek NLP
+python notebooks/03_lemmatisation.py
 
-# 4. Run statistical models
-Rscript notebooks/04_analysis.R
+# 4. Extract n-gram collocations and build dictionary
+Rscript notebooks/04_ngram_dictionary.R
+
+# 5. Calculate nostalgia scores
+Rscript notebooks/05_nostalgia_scoring.R
+
+# 6. Generate validation samples
+Rscript notebooks/06_validation.R
+
+# 7. Run regression and lag analysis
+Rscript notebooks/07_regression_analysis.R
 ```
 
 ---
 
 ## AI-Assisted Workflow
 
-This project incorporated **Claude (Anthropic)** as a research and development tool throughout the analysis pipeline:
+This project incorporated **Claude (Anthropic)** and **ChatGPT (OpenAI)** as research and development tools:
 
-- **Validation assistance:** Supporting iterative refinement of coding guidelines and edge case resolution during the 1,500-sentence manual validation process
-- **Dictionary development:** Assisting in conceptual disambiguation between nostalgic, nationalist, and Islamist rhetoric categories
-- **Code review:** R and Python script debugging and optimisation
-- **Research writing:** Structuring arguments and reviewing analytical framing
+- **Code debugging:** R and Python script troubleshooting throughout the analysis pipeline
+- **Conceptual framing:** Supporting disambiguation of nostalgia from nationalist and Islamist rhetoric during dictionary development
+- **Research writing:** Structuring analytical arguments and reviewing methodological framing
+- **This repository:** README and documentation prepared with Claude
 
-> Proficiency in prompt engineering and AI-assisted research workflows is increasingly central to modern data science practice — this project reflects that approach.
+> Note: All validation coding (500 sentences) was conducted entirely by the author. AI tools were not used for annotation due to concerns about political bias and the risk of conflating nostalgia with related rhetorical phenomena.
 
 ---
+
+## Data Sources
 
 - **Parliamentary speeches:** [ParlaMint 5.0](https://www.clarin.si/repository/xmlui/handle/11356/2004) — Erjavec et al. (2025)
 - **Inflation / Unemployment:** [TÜİK](https://www.tuik.gov.tr)
